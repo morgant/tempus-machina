@@ -1,0 +1,52 @@
+#!/bin/sh -e
+
+#
+# tmutil - a macOS (nee OS X) work-alike powered by rsync
+#
+
+# info
+tool="$(basename "$0")"
+version="0.1"
+copyright="(c) 2021 Morgan Aldridge"
+
+# global variables
+verbose=false
+
+# print usage instructions (help)
+usage() {
+  echo "Usage: ${tool} <verb> [options]"
+  echo
+}
+
+version() {
+  echo "${tool} v${version} ${copyright}"
+}
+
+main() {
+  # parse input args
+  if [ $# -eq 0 ]; then
+    usage
+    exit 1
+  fi
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -h|--help|help)
+        usage
+        exit
+        ;;
+      -V|--version|version)
+        version
+        exit
+        ;;
+      
+      *)
+        echo "Unknown verb '${1}'."
+        usage
+        exit 1
+        ;;
+    esac
+    shift
+  done
+}
+
+main "$@"
