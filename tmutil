@@ -11,6 +11,8 @@ copyright="(c) 2021 Morgan Aldridge"
 
 # global variables
 verbose=false
+config_path="/etc/${tool}"
+config_path=".${config_path}" # TODO: remove this development hack
 
 # print usage instructions (help)
 usage() {
@@ -20,6 +22,45 @@ usage() {
 
 version() {
   echo "${tool} v${version} ${copyright}"
+}
+
+init_configs() {
+  if [ ! -d "${config_path}" ] ; then
+    if mkdir -p "${config_path}" ; then
+      $verbose && echo "Created config path '${config_path}'"
+
+      touch "${config_path}/destinations"
+      $verbose && echo "Created '${config_path}/destinations' config file"
+    else
+      echo "Error! Unable to create config path '${config_path}'!"
+      return 1
+    fi
+  else
+    $verbose && echo "Config path '${config_path}' exists"
+  fi
+}
+
+has_destination() {
+  while IFS= read -r line ; do
+    if [ "$line" = "$1" ] ; then
+      return 0
+    fi
+  done < "${config_path}/destinations"
+  return 1
+}
+
+add_destination() {
+  if [ ! -d "$1" ] ; then
+    echo "Error! Could not add destination '${1}' because it does not exist or is not a directory!"
+    return 1
+  fi
+
+  if has_destination "$1" ; then
+    $verbose && echo "Destination '${1}' already added"
+  else
+    echo "$1" >> "${config_path}/destinations"
+    $verbose && echo "Added destination '${1}'"
+  fi
 }
 
 main() {
@@ -34,11 +75,18 @@ main() {
         usage
         exit
         ;;
+      -v)
+        verbose=true
+        ;;
       -V|--version|version)
         version
         exit
         ;;
-      
+      setdestination)
+        init_configs
+        add_destination "$2"
+        exit
+        ;;
       *)
         echo "Unknown verb '${1}'."
         usage
