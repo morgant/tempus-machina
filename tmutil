@@ -13,6 +13,7 @@ copyright="(c) 2021 Morgan Aldridge"
 verbose=false
 config_path="/etc/${tool}"
 config_path=".${config_path}" # TODO: remove this development hack
+verb=""
 
 # print usage instructions (help)
 usage() {
@@ -40,6 +41,12 @@ init_configs() {
   fi
 }
 
+is_valid_destination() {
+  if [ -z "$1" -o ! -d "$1" ] ; then
+    return 1
+  fi
+}
+
 has_destination() {
   while IFS= read -r line ; do
     if [ "$line" = "$1" ] ; then
@@ -49,9 +56,14 @@ has_destination() {
   return 1
 }
 
+remove_all_destinations() {
+  echo -n "" > "${config_path}/destinations"
+  $verbose && echo "Removed all destinations"
+}
+
 add_destination() {
-  if [ ! -d "$1" ] ; then
-    echo "Error! Could not add destination '${1}' because it does not exist or is not a directory!"
+  if ! is_valid_destination "$1" ; then
+    echo "Error! Could not add '${1}' because it not a valid destination!"
     return 1
   fi
 
@@ -69,7 +81,7 @@ main() {
     usage
     exit 1
   fi
-  while [ $# -gt 0 ]; do
+  while [ $# -gt 0 -a -z "${verb}" ]; do
     case "$1" in
       -h|--help|help)
         usage
@@ -83,9 +95,7 @@ main() {
         exit
         ;;
       setdestination)
-        init_configs
-        add_destination "$2"
-        exit
+        verb="$1"
         ;;
       *)
         echo "Unknown verb '${1}'."
@@ -95,6 +105,36 @@ main() {
     esac
     shift
   done
+
+  if [ -z "${verb}" ] ; then
+    usage
+    exit 1
+  fi
+
+  init_configs
+
+  case "${verb}" in
+    setdestination)
+      setdestination_append=false
+      while getopts a opt_name ; do
+        case "${opt_name}" in
+          a)
+            setdestination_append=true
+            ;;
+          ?)
+            echo "Unknown '-${opt_name}' option for '${verb}' verb!"
+            usage
+            exit 1
+            ;;
+        esac
+      done
+      shift $(( $OPTIND - 1 ))
+      if ! $setdestination_append && is_valid_destination "$1" ; then
+        remove_all_destinations
+      fi
+      add_destination "$1"
+      ;;
+  esac
 }
 
 main "$@"
