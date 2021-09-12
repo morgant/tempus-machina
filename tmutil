@@ -25,10 +25,35 @@ version() {
   echo "${tool} v${version} ${copyright}"
 }
 
+init_path_uuid() {
+  if [ -z "$1" -o ! -d "$1" ] ; then
+    return 1
+  fi
+  if [ -f "${1}/.uuid" ] ; then
+    $verbose && echo "UUID for path '$1' already exists."
+  else
+    if uuidgen > "${1}/.uuid" ; then
+      $verbose && echo "Generated new UUID for path '$1'."
+    else
+      echo "Error generating UUID for path '$1'!"
+      return 1
+    fi
+  fi
+}
+
+path_uuid() {
+  if [ ! -d "${1}" -o ! -f "${1}/.uuid" ] ; then
+    return 1
+  fi
+  cat "${1}/.uuid"
+}
+
 init_configs() {
   if [ ! -d "${config_path}" ] ; then
     if mkdir -p "${config_path}" ; then
       $verbose && echo "Created config path '${config_path}'"
+
+      init_path_uuid "${config_path}"
 
       touch "${config_path}/destinations"
       $verbose && echo "Created '${config_path}/destinations' config file"
@@ -41,10 +66,29 @@ init_configs() {
   fi
 }
 
+root_uuid() {
+  path_uuid "${config_path}"
+}
+
 is_valid_destination() {
   if [ -z "$1" -o ! -d "$1" ] ; then
     return 1
   fi
+}
+
+init_destination() {
+  if ! is_valid_destination "$1" ; then
+    return 1
+  fi
+
+  if [ ! -d "${1}/Backups.backupdb" ] ; then
+    mkdir -p "${1}/Backups.backupdb"
+    $verbose && echo "Created 'Backups.backupdb' in destination '$1'."
+  else
+    $verbose && echo "Destination '$1' already has a 'Backups.backupdb'."
+  fi
+
+  init_path_uuid "${1}/Backups.backupdb"
 }
 
 is_remote_destination() {
@@ -55,13 +99,27 @@ destination_type() {
   is_remote_destination "$1" && echo "Remote" || echo "Local"
 }
 
+destination_uuid() {
+  path_uuid "${1}/Backups.backupdb"
+}
+
 has_destination() {
   while IFS= read -r line ; do
-    if [ "$line" = "$1" ] ; then
+    if [ "$line" = "$(destination_uuid "$1")=$1" ] ; then
       return 0
     fi
   done < "${config_path}/destinations"
   return 1
+}
+
+destination_config_mount() {
+  #echo "${1#$(destination_config_uuid "$1")=}"
+  echo "${1#*=}"
+}
+
+destination_config_uuid() {
+  #echo "$1" | grep -Eo "^[^=]+"
+  echo "${1%%=*}"
 }
 
 print_destinations() {
@@ -69,9 +127,11 @@ print_destinations() {
     echo "===================================================="
     echo "Name          : n/a"
     echo -n "Kind          : "
-    destination_type "$1"
-    echo "Mount Point   : ${line}"
-    echo "ID            : n/a"
+    destination_type "$(destination_config_mount "${line}")"
+    echo -n "Mount Point   : "
+    destination_config_mount "${line}"
+    echo -n "ID            : "
+    destination_config_uuid "${line}"
   done < "${config_path}/destinations"
 }
 
@@ -89,7 +149,9 @@ add_destination() {
   if has_destination "$1" ; then
     $verbose && echo "Destination '${1}' already added"
   else
-    echo "$1" >> "${config_path}/destinations"
+    init_destination "$1"
+
+    echo "$(destination_uuid "$1")=$1" >> "${config_path}/destinations"
     $verbose && echo "Added destination '${1}'"
   fi
 }
