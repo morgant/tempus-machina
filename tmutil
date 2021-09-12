@@ -47,6 +47,14 @@ is_valid_destination() {
   fi
 }
 
+is_remote_destination() {
+  echo "$1" | grep -E ".+:./+" > /dev/null
+}
+
+destination_type() {
+  is_remote_destination "$1" && echo "Remote" || echo "Local"
+}
+
 has_destination() {
   while IFS= read -r line ; do
     if [ "$line" = "$1" ] ; then
@@ -54,6 +62,17 @@ has_destination() {
     fi
   done < "${config_path}/destinations"
   return 1
+}
+
+print_destinations() {
+  while IFS= read -r line ; do
+    echo "===================================================="
+    echo "Name          : n/a"
+    echo -n "Kind          : "
+    destination_type "$1"
+    echo "Mount Point   : ${line}"
+    echo "ID            : n/a"
+  done < "${config_path}/destinations"
 }
 
 remove_all_destinations() {
@@ -94,7 +113,7 @@ main() {
         version
         exit
         ;;
-      setdestination)
+      setdestination|destinationinfo)
         verb="$1"
         ;;
       *)
@@ -122,7 +141,6 @@ main() {
             setdestination_append=true
             ;;
           ?)
-            echo "Unknown '-${opt_name}' option for '${verb}' verb!"
             usage
             exit 1
             ;;
@@ -133,6 +151,23 @@ main() {
         remove_all_destinations
       fi
       add_destination "$1"
+      ;;
+    destinationinfo)
+      while getopts X opt_name ; do
+        case "${opt_name}" in
+          X)
+            echo "The '-${opt_name}' option for '${verb}' verb is not supported at this time."
+            usage
+            exit 1
+            ;;
+          ?)
+            usage
+            exit 1
+            ;;
+        esac
+      done
+      shift $(( $OPTIND - 1 ))
+      print_destinations
       ;;
   esac
 }
