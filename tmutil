@@ -235,6 +235,36 @@ add_exclusion() {
   echo "$1" >> "${config_path}/exclusions" && echo "Added exclusion '${1}'."
 }
 
+remove_exclusion() {
+  if [ -z "$1" ] ; then
+    echo "Error! Must provide an exclusion!"
+    return 1
+  fi
+
+  config_tmp="$(mktemp -d)"
+  if [ ! -d "${config_tmp}" ] ; then
+    echo "Error! Unable to create tmp directory!"
+    return 1
+  fi
+  touch "${config_tmp}/exclusions"
+
+  while IFS= read -r line ; do
+    if [ "$line" != "$1" ] ; then
+      echo "${line}" >> "${config_tmp}/exclusions"
+    fi
+  done < "${config_path}/exclusions"
+
+  if diff -q "${config_tmp}/exclusions" "${config_path}/exclusions" > /dev/null ; then
+    echo "Error! Could not find exclusion '${1}' to remove!"
+    rm -r "${config_tmp}"
+    return 1
+  else
+    echo "Removed exclusion '${1}'."
+    mv "${config_tmp}/exclusions" "${config_path}/exclusions"
+    rm -r "${config_tmp}"
+  fi
+}
+
 main() {
   # parse input args
   if [ $# -eq 0 ]; then
@@ -254,7 +284,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion)
         verb="$1"
         ;;
       *)
@@ -339,6 +369,27 @@ main() {
         exit 1
       fi
       add_exclusion "$1"
+      ;;
+    removeexclusion)
+      removeexclusion_fixed=false
+      while getopts p opt_name ; do
+        case "$opt_name" in
+          p)
+            removeexclusion_fixed=true
+            ;;
+          ?)
+            usage
+            exit 1
+            ;;
+        esac
+      done
+      shift $(( $OPTIND -1 ))
+
+      if ! $removeexclusion_fixed ; then
+        echo "Error! The '-p' option is required for the '${verb}' verb."
+        exit 1
+      fi
+      remove_exclusion "$1"
       ;;
   esac
 }
