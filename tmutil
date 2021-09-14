@@ -200,6 +200,12 @@ machine_directory() {
   done < "${config_path}/destinations"
 }
 
+machine_backups() {
+  while IFS= read -r line ; do
+    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest"
+  done < "${config_path}/destinations"
+}
+
 main() {
   # parse input args
   if [ $# -eq 0 ]; then
@@ -219,7 +225,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups)
         verb="$1"
         ;;
       *)
@@ -280,6 +286,9 @@ main() {
       ;;
     machinedirectory)
       machine_directory
+      ;;
+    listbackups)
+      machine_backups
       ;;
   esac
 }
