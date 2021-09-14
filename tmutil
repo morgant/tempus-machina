@@ -140,6 +140,36 @@ remove_all_destinations() {
   $verbose && echo "Removed all destinations"
 }
 
+remove_destination() {
+  if [ -z "$1" ] ; then
+    echo "Error! Must provide a destination ID to remove!"
+    return 1
+  fi
+
+  config_tmp="$(mktemp -d)"
+  if [ ! -d "${config_tmp}" ] ; then
+    echo "Error! Unable to create tmp directory!"
+    return 1
+  fi
+  touch "${config_tmp}/destinations"
+
+  while IFS= read -r line ; do
+    if [ "$line" != "${1}=$(destination_config_mount "${line}")" ] ; then
+      echo "${line}" >> "${config_tmp}/destinations"
+    fi
+  done < "${config_path}/destinations"
+
+  if diff -q "${config_tmp}/destinations" "${config_path}/destinations" > /dev/null ; then
+    echo "Error! Could not find destination with ID '${1}' to remove!"
+    rm -r "${config_tmp}"
+    return 1
+  else
+    echo "Removed destination with ID '${1}'."
+    mv "${config_tmp}/destinations" "${config_path}/destinations"
+    rm -r "${config_tmp}"
+  fi
+}
+
 add_destination() {
   if ! is_valid_destination "$1" ; then
     echo "Error! Could not add '${1}' because it not a valid destination!"
@@ -175,7 +205,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo)
+      setdestination|destinationinfo|removedestination)
         verb="$1"
         ;;
       *)
@@ -231,6 +261,8 @@ main() {
       shift $(( $OPTIND - 1 ))
       print_destinations
       ;;
+    removedestination)
+      remove_destination "$1"
   esac
 }
 
