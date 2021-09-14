@@ -265,6 +265,23 @@ remove_exclusion() {
   fi
 }
 
+is_excluded() {
+  while [ $# -gt 0 ] ; do
+    [ -z "$1" ] && continue
+
+    excluded=false
+    while IFS= read -r line ; do
+      if echo "$1" | grep -q "${line}" ; then
+        excluded=true
+        break
+      fi
+    done < "${config_path}/exclusions"
+
+    $excluded && echo "[Excluded] ${1}" || echo "[Included] ${1}"
+    shift
+  done
+}
+
 main() {
   # parse input args
   if [ $# -eq 0 ]; then
@@ -284,7 +301,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded)
         verb="$1"
         ;;
       *)
@@ -390,6 +407,23 @@ main() {
         exit 1
       fi
       remove_exclusion "$1"
+      ;;
+    isexcluded)
+      while getopts X opt_name ; do
+        case "${opt_name}" in
+          X)
+            echo "The '-${opt_name}' option for '${verb}' verb is not supported at this time."
+            usage
+            exit 1
+            ;;
+          ?)
+            usage
+            exit 1
+            ;;
+        esac
+      done
+      shift $(( $OPTIND - 1 ))
+      is_excluded "$@"
       ;;
   esac
 }
