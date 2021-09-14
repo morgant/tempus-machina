@@ -58,6 +58,9 @@ init_configs() {
 
       touch "${config_path}/destinations"
       $verbose && echo "Created '${config_path}/destinations' config file"
+
+      touch "${config_path}/exclusions"
+      $verbose && echo "Created '${config_path}/exclusions' config file"
     else
       echo "Error! Unable to create config path '${config_path}'!"
       return 1
@@ -206,6 +209,32 @@ machine_backups() {
   done < "${config_path}/destinations"
 }
 
+has_exclusion() {
+  while IFS= read -r line ; do
+    if [ "$line" = "$1" ] ; then
+      return 0
+    fi
+  done < "${config_path}/exclusions"
+  return 1
+}
+
+add_exclusion() {
+  if [ -z "$1" ] ; then
+    echo "Error! Must provide an exclusion!"
+    return 1
+  fi
+
+  if has_exclusion "$1" ; then
+    echo "Exclusion '${1}' already exists."
+    return 0
+  fi
+
+  if [ ! -e "$1" ]; then
+    echo "WARNING: exclusion target file or directory '${1}' does not yet exist!"
+  fi
+  echo "$1" >> "${config_path}/exclusions" && echo "Added exclusion '${1}'."
+}
+
 main() {
   # parse input args
   if [ $# -eq 0 ]; then
@@ -225,7 +254,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion)
         verb="$1"
         ;;
       *)
@@ -289,6 +318,27 @@ main() {
       ;;
     listbackups)
       machine_backups
+      ;;
+    addexclusion)
+      addexclusion_fixed=false
+      while getopts p opt_name ; do
+        case "$opt_name" in
+          p)
+            addexclusion_fixed=true
+            ;;
+          ?)
+            usage
+            exit 1
+            ;;
+        esac
+      done
+      shift $(( $OPTIND -1 ))
+
+      if ! $addexclusion_fixed ; then
+        echo "Error! The '-p' option is required for the '${verb}' verb."
+        exit 1
+      fi
+      add_exclusion "$1"
       ;;
   esac
 }
