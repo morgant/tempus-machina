@@ -11,6 +11,7 @@ copyright="(c) 2021 Morgan Aldridge"
 
 # global variables
 verbose=false
+host="$(hostname)"
 config_path="/etc/${tool}"
 config_path=".${config_path}" # TODO: remove this development hack
 verb=""
@@ -89,6 +90,13 @@ init_destination() {
   fi
 
   init_path_uuid "${1}/Backups.backupdb"
+
+  if [ ! -d "${1}/Backups.backupdb/${host}" ] ; then
+    mkdir -p "${1}/Backups.backupdb/${host}"
+    $verbose && echo "Created machine directory in destination '$1'."
+  else
+    $verbose && echo "Destination '$1' already has a machine directory."
+  fi
 }
 
 is_remote_destination() {
@@ -186,6 +194,12 @@ add_destination() {
   fi
 }
 
+machine_directory() {
+  while IFS= read -r line ; do
+    echo "$(destination_config_mount "${line}")/Backups.backupdb/${host}"
+  done < "${config_path}/destinations"
+}
+
 main() {
   # parse input args
   if [ $# -eq 0 ]; then
@@ -205,7 +219,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination)
+      setdestination|destinationinfo|removedestination|machinedirectory)
         verb="$1"
         ;;
       *)
@@ -263,6 +277,10 @@ main() {
       ;;
     removedestination)
       remove_destination "$1"
+      ;;
+    machinedirectory)
+      machine_directory
+      ;;
   esac
 }
 
