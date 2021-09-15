@@ -246,23 +246,24 @@ remove_exclusion() {
     echo "Error! Unable to create tmp directory!"
     return 1
   fi
-  touch "${config_tmp}/exclusions"
 
-  while IFS= read -r line ; do
-    if [ "$line" != "$1" ] ; then
-      echo "${line}" >> "${config_tmp}/exclusions"
+  while [ $# -gt 0 ] ; do
+    touch "${config_tmp}/exclusions"
+
+    while IFS= read -r line ; do
+      [ "$line" != "$1" ] && echo "${line}" >> "${config_tmp}/exclusions"
+    done < "${config_path}/exclusions"
+
+    if diff -q "${config_tmp}/exclusions" "${config_path}/exclusions" > /dev/null ; then
+      echo "WARNING! Could not find exclusion '${1}' to remove!"
+      rm "${config_tmp}/exclusions"
+    else
+      echo "Removed exclusion '${1}'."
+      mv "${config_tmp}/exclusions" "${config_path}/exclusions"
     fi
-  done < "${config_path}/exclusions"
-
-  if diff -q "${config_tmp}/exclusions" "${config_path}/exclusions" > /dev/null ; then
-    echo "Error! Could not find exclusion '${1}' to remove!"
-    rm -r "${config_tmp}"
-    return 1
-  else
-    echo "Removed exclusion '${1}'."
-    mv "${config_tmp}/exclusions" "${config_path}/exclusions"
-    rm -r "${config_tmp}"
-  fi
+    shift
+  done
+  rm -r "${config_tmp}"
 }
 
 is_excluded() {
@@ -406,7 +407,7 @@ main() {
         echo "Error! The '-p' option is required for the '${verb}' verb."
         exit 1
       fi
-      remove_exclusion "$1"
+      remove_exclusion "$@"
       ;;
     isexcluded)
       while getopts X opt_name ; do
