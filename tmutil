@@ -224,15 +224,15 @@ add_exclusion() {
     return 1
   fi
 
-  if has_exclusion "$1" ; then
-    echo "Exclusion '${1}' already exists."
-    return 0
-  fi
-
-  if [ ! -e "$1" ]; then
-    echo "WARNING: exclusion target file or directory '${1}' does not yet exist!"
-  fi
-  echo "$1" >> "${config_path}/exclusions" && echo "Added exclusion '${1}'."
+  while [ $# -gt 0 ] ; do
+    if has_exclusion "$1" ; then
+      echo "Exclusion '${1}' already exists."
+    else
+      [ ! -e "$1" ] && echo "WARNING: exclusion target file or directory '${1}' does not yet exist!"
+      echo "$1" >> "${config_path}/exclusions" && echo "Added exclusion '${1}'."
+    fi
+    shift
+  done
 }
 
 remove_exclusion() {
@@ -385,7 +385,7 @@ main() {
         echo "Error! The '-p' option is required for the '${verb}' verb."
         exit 1
       fi
-      add_exclusion "$1"
+      add_exclusion "$@"
       ;;
     removeexclusion)
       removeexclusion_fixed=false
