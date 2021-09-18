@@ -26,6 +26,10 @@ version() {
   echo "${tool} v${version} ${copyright}"
 }
 
+is_root() {
+  [ $(id -u) -ne 0 ] && return 1
+}
+
 init_path_uuid() {
   if [ -z "$1" -o ! -d "$1" ] ; then
     return 1
@@ -454,6 +458,7 @@ main() {
 
   case "${verb}" in
     setdestination)
+      ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
       setdestination_append=false
       while getopts a opt_name ; do
         case "${opt_name}" in
@@ -490,6 +495,7 @@ main() {
       print_destinations
       ;;
     removedestination)
+      ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
       remove_destination "$1"
       ;;
     machinedirectory)
@@ -499,6 +505,7 @@ main() {
       machine_backups
       ;;
     addexclusion)
+      ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
       addexclusion_fixed=false
       while getopts p opt_name ; do
         case "$opt_name" in
@@ -520,6 +527,7 @@ main() {
       add_exclusion "$@"
       ;;
     removeexclusion)
+      ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
       removeexclusion_fixed=false
       while getopts p opt_name ; do
         case "$opt_name" in
@@ -558,6 +566,7 @@ main() {
       is_excluded "$@"
       ;;
     startbackup)
+      ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
       startbackup_block=false
       startbackup_rotation=false
       startbackup_dest_uuid=""
