@@ -13,7 +13,6 @@ copyright="(c) 2021 Morgan Aldridge"
 verbose=false
 host="$(hostname)"
 config_path="/etc/${tool}"
-config_path=".${config_path}" # TODO: remove this development hack
 verb=""
 
 # print usage instructions (help)
