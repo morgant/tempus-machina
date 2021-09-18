@@ -102,21 +102,30 @@ init_destination() {
   fi
 }
 
-is_remote_destination() {
+is_destination_remote() {
   echo "$1" | grep -E ".+:./+" > /dev/null
 }
 
 destination_type() {
-  is_remote_destination "$1" && echo "Remote" || echo "Local"
+  is_destination_remote "$1" && echo "Remote" || echo "Local"
 }
 
 destination_uuid() {
   path_uuid "${1}/Backups.backupdb"
 }
 
-has_destination() {
+has_destination_mount() {
   while IFS= read -r line ; do
     if [ "$line" = "$(destination_uuid "$1")=$1" ] ; then
+      return 0
+    fi
+  done < "${config_path}/destinations"
+  return 1
+}
+
+has_destination_uuid() {
+  while IFS= read -r line ; do
+    if [ "$(destination_config_uuid "$line")" = "$1" ] ; then
       return 0
     fi
   done < "${config_path}/destinations"
@@ -131,6 +140,16 @@ destination_config_mount() {
 destination_config_uuid() {
   #echo "$1" | grep -Eo "^[^=]+"
   echo "${1%%=*}"
+}
+
+destination_mount_by_uuid() {
+  while IFS= read -r line ; do
+    if [ "$(destination_config_uuid "$line")" = "$1" ] ; then
+      echo "$(destination_config_mount "$line")"
+      return 0
+    fi
+  done < "${config_path}/destinations"
+  return 1
 }
 
 print_destinations() {
@@ -187,7 +206,7 @@ add_destination() {
     return 1
   fi
 
-  if has_destination "$1" ; then
+  if has_destination_mount "$1" ; then
     $verbose && echo "Destination '${1}' already added"
   else
     init_destination "$1"
@@ -207,6 +226,44 @@ machine_backups() {
   while IFS= read -r line ; do
     find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest"
   done < "${config_path}/destinations"
+}
+
+has_destination_mount_previous_backup() {
+  [ -z "$1" ] && return 1
+  if is_destination_remote "$1" ; then
+    echo "ERROR! Could not determine if remote destination '${1}' has previous backup because remote destinations are not yet supported!"
+    return 1
+  elif [ ! -d "$1" -o ! -h "${1}/Backups.backupdb/${host}/Latest" ] ; then
+    return 1
+  fi
+}
+
+destination_mount_previous_backup() {
+  [ -z "$1" ] && return 1
+  if is_destination_remote "$1" ; then
+    echo "ERROR! Could not find remote destination '${1}' previous backup because remote destinations are not yet supported!"
+    return 1
+  else
+    [ ! -d "$1" ] && return 1
+    readlink "${1}/Backups.backupdb/${host}/Latest"
+  fi
+}
+
+destination_mount_finalize_backup() {
+  [ -z "$1" -o -z "$2" -o -z "$3" ] && return 1
+  if is_destination_remote "$1" ; then
+    echo "ERROR! Could not finalize remote destination '${1}' backup '${2}' because remote destinations are not yet supported!"
+    return 1
+  else
+    [ ! -d "${1}" ] && return 1
+
+    # move the backup to its final name
+    mv "${1}/Backups.backupdb/${host}/${2}" "${1}/Backups.backupdb/${host}/${3}"
+
+    # symlink as latest
+    [ -h "${1}/Backups.backupdb/${host}/Latest" ] && rm "${1}/Backups.backupdb/${host}/Latest"
+    ln -s "${1}/Backups.backupdb/${host}/${3}" "${1}/Backups.backupdb/${host}/Latest"
+  fi
 }
 
 has_exclusion() {
@@ -283,6 +340,80 @@ is_excluded() {
   done
 }
 
+backup() {
+  if [ -n "$1" ] ; then
+    if ! has_destination_uuid "$1" ; then
+      echo "Error! No destination found with ID '$1'!"
+      exit 1
+    fi
+  fi
+
+  while IFS= read -r line ; do
+    rsync_dest_mount=""
+    rsync_dest=""
+    rsync_dest_final="$(date "+%Y-%m-%d-%H%M%S")"
+    rsync_dest_tmp=".${rsync_dest_final}"
+    rsync_dest_prev=""
+    rsync_sucess=false
+
+    if [ -n "$1" ] ; then
+      if [ "${line}" = "${1}=$(destination_mount_by_uuid "${1}")" ] ; then
+        rsync_dest_mount="$(destination_mount_by_uuid "$1")"
+      else
+        continue
+      fi
+    else
+      rsync_dest_mount="$(destination_config_mount "${line}")"
+    fi
+    rsync_dest="${rsync_dest_mount}/Backups.backupdb/${host}/${rsync_dest_tmp}/"
+
+    if is_destination_remote "${rsync_dest_mount}" ; then
+      echo "ERROR! Could not backup to remote destination '${rsync_dest_mount}' because remote destinations are not yet supported!"
+      return 1
+    fi
+
+    if ! has_destination_mount_previous_backup "${rsync_dest_mount}" ; then
+      $verbose && echo "Starting full backup to '${rsync_dest}'..."
+      rsync \
+        --dry-run \
+        --recursive \
+        --perms \
+        --owner \
+        --group \
+        --times \
+        --links \
+        --delete \
+        --delete-excluded \
+        --exclude-from="${config_path}/exclusions" \
+        "/" \
+        "${rsync_dest}" && rsync_success=true
+    else
+      $verbose && echo "Starting incremental backup to '${rsync_dest}'..."
+      rsync_dest_prev="$(destination_mount_previous_backup "${rsync_dest_mount}")"
+      rsync \
+        --dry-run \
+        --recursive \
+        --perms \
+        --owner \
+        --group \
+        --times \
+        --links \
+        --delete \
+        --delete-excluded \
+        --exclude-from="${config_path}/exclusions" \
+        --link-dest="${rsync_dest_prev}" \
+        "/" \
+        "${rsync_dest}" && rsync_success=true
+    fi
+    if $rsync_success ; then
+      $verbose && echo "Successfully completed backup to '${rsync_dest}'."
+      destination_mount_finalize_backup "${rsync_dest_mount}" "${rsync_dest_tmp}" "${rsync_dest_final}"
+    else
+      echo "ERROR! Unknown errors occurred during backup to  '${rsync_dest}'!"
+    fi
+  done < "${config_path}/destinations"
+}
+
 main() {
   # parse input args
   if [ $# -eq 0 ]; then
@@ -302,7 +433,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup)
         verb="$1"
         ;;
       *)
@@ -425,6 +556,36 @@ main() {
       done
       shift $(( $OPTIND - 1 ))
       is_excluded "$@"
+      ;;
+    startbackup)
+      startbackup_block=false
+      startbackup_rotation=false
+      startbackup_dest_uuid=""
+      while getopts "brd:" opt_name ; do
+        case "${opt_name}" in
+          b)
+            startbackup_block=true
+            ;;
+          r)
+            startbackup_rotation=true
+            echo "The '-${opt_name}' option for '${verb}' verb is not supported at this time."
+            ;;
+          d)
+            startbackup_dest_uuid="$OPTARG"
+            ;;
+          ?)
+            usage
+            exit 1
+            ;;
+        esac
+      done
+      shift $(( $OPTIND - 1 ))
+
+      if ! $startbackup_block; then
+        echo "Error! The '-b' option is required for the '${verb}' verb."
+        exit 1
+      fi
+      backup "${startbackup_dest_uuid}"
       ;;
   esac
 }
