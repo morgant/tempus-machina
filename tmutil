@@ -233,6 +233,14 @@ machine_backups() {
   done < "${config_path}/destinations"
 }
 
+machine_backup_latest() {
+  while IFS= read -r line ; do
+    if has_destination_mount_previous_backup "$(destination_config_mount "${line}")" ; then
+      destination_mount_previous_backup "$(destination_config_mount "${line}")"
+    fi
+  done < "${config_path}/destinations"
+}
+
 has_destination_mount_previous_backup() {
   [ -z "$1" ] && return 1
   if is_destination_remote "$1" ; then
@@ -436,7 +444,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup|latestbackup)
         verb="$1"
         ;;
       *)
@@ -598,6 +606,9 @@ main() {
     stopbackup)
       echo "Error! The '${verb}' verb is not supported at this time."
       exit 1
+      ;;
+    latestbackup)
+      machine_backup_latest
       ;;
   esac
 }
