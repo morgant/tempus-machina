@@ -436,7 +436,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup)
         verb="$1"
         ;;
       *)
@@ -594,6 +594,10 @@ main() {
         exit 1
       fi
       backup "${startbackup_dest_uuid}"
+      ;;
+    stopbackup)
+      echo "Error! The '${verb}' verb is not supported at this time."
+      exit 1
       ;;
   esac
 }
