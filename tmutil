@@ -380,7 +380,6 @@ backup() {
     if ! has_destination_mount_previous_backup "${rsync_dest_mount}" ; then
       $verbose && echo "Starting full backup to '${rsync_dest}'..."
       rsync \
-        --dry-run \
         --recursive \
         --perms \
         --owner \
@@ -396,7 +395,6 @@ backup() {
       $verbose && echo "Starting incremental backup to '${rsync_dest}'..."
       rsync_dest_prev="$(destination_mount_previous_backup "${rsync_dest_mount}")"
       rsync \
-        --dry-run \
         --recursive \
         --perms \
         --owner \
