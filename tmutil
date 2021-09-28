@@ -229,7 +229,7 @@ machine_directory() {
 
 machine_backups() {
   while IFS= read -r line ; do
-    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest"
+    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest" -exec basename {} \;
   done < "${config_path}/destinations"
 }
 
