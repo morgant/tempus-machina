@@ -5,6 +5,11 @@ by Morgan Aldridge <morgant@makkintosshu.com>
 
 Tempus Machina aims to provide a macOS (nee OS X) [Time Machine](https://en.wikipedia.org/wiki/Time_Machine_(macOS)) work-alike powered by [rsync](https://rsync.samba.org/), especially the `tmutil` command line utility.
 
+## PREREQUISITES
+
+* OpenBSD:
+  * e2fsprogs package (for `genuuid`)
+
 ## USAGE
 
 The intent is to support the same `tmutil` command line interface as Apple's native binary:
