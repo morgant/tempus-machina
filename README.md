@@ -37,7 +37,7 @@ Supported verbs currently include:
   * Requires root
   * If the `-p` option (currently required) is given, the fixed-path exclusion witll be removed for `item`
 * `isexcluded item`: Determine if a file/directory/mount will be excluded from backups
-* `startbackup [-b] [-d dest_id]: Manuallly start a new backup
+* `startbackup [-b] [-d dest_id]`: Manually start a new backup
   * Currently requires root
   * If the `-b` option (currently required) is given, it will wait until the backup has completed before exiting
   * If the `-d` option is given, the backup will be performed to the destination with `dest_id` unique identifier
