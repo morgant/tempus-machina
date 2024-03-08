@@ -7,7 +7,7 @@
 # info
 tool="$(basename "$0")"
 version="0.1"
-copyright="(c) 2021 Morgan Aldridge"
+copyright="(c) 2021-2024 Morgan Aldridge"
 
 # global variables
 verbose=false
