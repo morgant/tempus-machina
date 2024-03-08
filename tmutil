@@ -229,7 +229,13 @@ machine_directory() {
 
 machine_backups() {
   while IFS= read -r line ; do
-    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest" -exec basename {} \;
+    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest" ! -name ".*" -exec basename {} \;
+  done < "${config_path}/destinations"
+}
+
+machine_in_progress_backups() {
+  while IFS= read -r line ; do
+    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 -name ".????-??-??-??????" -exec basename {} \;
   done < "${config_path}/destinations"
 }
 
@@ -239,6 +245,16 @@ machine_backup_latest() {
       destination_mount_previous_backup "$(destination_config_mount "${line}")"
     fi
   done < "${config_path}/destinations"
+}
+
+has_destination_mount_in_progress_backup() {
+  [ -z "$1" ] && return 1
+  if is_destination_remote "$1" ; then
+    echo "ERROR! Could not determine if remote destination '${1}' has in progress backup because remote destinations are not yet supported!"
+    return 1
+  elif [ "$(find "${1}/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 -name ".????-??-??-??????" | wc -l | awk "{ print $1 }")" -gt 0 ] ; then
+    return 1
+  fi
 }
 
 has_destination_mount_previous_backup() {
@@ -382,6 +398,9 @@ backup() {
 
     if is_destination_remote "${rsync_dest_mount}" ; then
       echo "ERROR! Could not backup to remote destination '${rsync_dest_mount}' because remote destinations are not yet supported!"
+      return 1
+    elif has_destination_mount_in_progress_backup "${rsync_dest_mount}" ; then
+      echo "ERROR! Could not start backup to destination '${rsync_dest_mount}' because there is an in progress backup!"
       return 1
     fi
 
