@@ -227,6 +227,28 @@ machine_directory() {
   done < "${config_path}/destinations"
 }
 
+is_machine_directory() {
+  [ -z "$1" ] && return 1
+
+  machine_dir_temp="$(mktemp)"
+  if [ ! -f "${machine_dir_temp}" ] ; then
+    echo "Error! Unable to create temporary file!"
+    return 1
+  fi
+  machine_directory >> "${machine_dir_temp}"
+
+  match=false
+  while IFS= read -r line ; do
+    if [ "$line" = "$1" ] ; then
+      match=true
+      break
+    fi
+  done < "${machine_dir_temp}"
+
+  rm "${machine_dir_temp}"
+  $match
+}
+
 machine_backups() {
   while IFS= read -r line ; do
     find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest" ! -name ".*" -exec basename {} \;
@@ -235,7 +257,7 @@ machine_backups() {
 
 machine_in_progress_backups() {
   while IFS= read -r line ; do
-    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 -name ".????-??-??-??????" -exec basename {} \;
+    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 -name ".[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" #-exec basename {} \;
   done < "${config_path}/destinations"
 }
 
@@ -369,6 +391,27 @@ is_excluded() {
   done
 }
 
+is_backup_directory() {
+  match=false
+  if [ -n "$1" -a -d "$1" ] ; then
+    backup_name="$(basename "${1}")"
+
+    # directory should have timestamp-formatted name
+    # (incl. optional in-progress denotion, i.e. leading '.')
+    if echo "${backup_name}" | grep -q -E "^\.?[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}$" ; then
+      while IFS= read -r line ; do
+        # does path start with destination?
+        destination="$(destination_config_mount "${line}")/Backups.backupdb"
+        if echo "$1" | grep -q "${destination}" ; then
+          # search for directory only within machine directories in destination path
+          find "${destination}" -mindepth 2 -maxdepth 2 -type d -name "${backup_name}" > /dev/null && match=true
+        fi
+      done < "${config_path}/destinations"
+    fi
+  fi
+  $match
+}
+
 backup() {
   if [ -n "$1" ] ; then
     if ! has_destination_uuid "$1" ; then
@@ -383,7 +426,7 @@ backup() {
     rsync_dest_final="$(date "+%Y-%m-%d-%H%M%S")"
     rsync_dest_tmp=".${rsync_dest_final}"
     rsync_dest_prev=""
-    rsync_sucess=false
+    rsync_success=false
 
     if [ -n "$1" ] ; then
       if [ "${line}" = "${1}=$(destination_mount_by_uuid "${1}")" ] ; then
@@ -444,6 +487,54 @@ backup() {
   done < "${config_path}/destinations"
 }
 
+delete_backup() {
+  if [ -z "$1" ] ; then
+    echo "Error! Must provide a backup path!"
+    return 1
+  elif ! is_backup_directory "$1" ; then
+    echo "Error! Unable to delete backup '${1}' because it is not a valid backup directory!"
+    return 1
+  fi
+
+  [ "$(basename "$1" | cut -c 1-1)" = "." ] && backup_type="in progress backup" || backup_type="backup"
+  $verbose && echo "Deleting ${backup_type} '${1}'..."
+  if rm -r "$1" ; then
+    $verbose && echo "Successully deleted ${backup_type} '${1}'"
+  else
+    echo "Failed to delete ${backu_type} '${1}'!"
+    return 1
+  fi
+}
+
+delete_in_progress_backups() {
+  if [ -z "$1" ] ; then
+    echo "Error! Must provide a machine directory!"
+    return 1
+  elif ! is_machine_directory "$1" ; then
+    echo "Error! Unable to delete in progress backups in '${1}' because it is not a machine directory!"
+    return 1
+  fi
+
+  $verbose && echo "Deleting in progress backups in '${1}/'..."
+  in_progress_temp="$(mktemp)"
+  if [ ! -f "${in_progress_temp}" ] ; then
+    echo "Error! Unable to create temporary file!"
+    return 1
+  fi
+  machine_in_progress_backups >> "${in_progress_temp}"
+
+  delete_success=false
+  while IFS= read -r line ; do
+    in_progress="$(basename "${line}")"
+    if delete_backup "${line}" ; then
+      delete_success=true
+    fi
+  done < "${in_progress_temp}"
+  rm "${in_progress_temp}"
+
+  $delete_success
+}
+
 main() {
   # parse input args
   if [ $# -eq 0 ]; then
@@ -463,7 +554,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup|latestbackup)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup|latestbackup|deleteinprogress)
         verb="$1"
         ;;
       *)
@@ -628,6 +719,10 @@ main() {
       ;;
     latestbackup)
       machine_backup_latest
+      ;;
+    deleteinprogress)
+      ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
+      delete_in_progress_backups "$1"
       ;;
   esac
 }

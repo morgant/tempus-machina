@@ -42,6 +42,8 @@ Supported verbs currently include:
   * If the `-b` option (currently required) is given, it will wait until the backup has completed before exiting
   * If the `-d` option is given, the backup will be performed to the destination with `dest_id` unique identifier
 * `latestbackup`: Print information about the computer's most recent backup
+* `deleteinprogress machine_directory`: Delete incomplete backups in path
+  * Requires root
 
 Not all of the options that Apple's binary supports are included above. More verbs and options will be added as time permits.
 
