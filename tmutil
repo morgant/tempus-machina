@@ -274,9 +274,8 @@ has_destination_mount_in_progress_backup() {
   if is_destination_remote "$1" ; then
     echo "ERROR! Could not determine if remote destination '${1}' has in progress backup because remote destinations are not yet supported!"
     return 1
-  elif [ "$(find "${1}/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 -name ".????-??-??-??????" | wc -l | awk "{ print $1 }")" -gt 0 ] ; then
-    return 1
   fi
+  [ "$(find "${1}/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 -name ".[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]" | wc -l | tr -d ' ')" -gt "0" ]
 }
 
 has_destination_mount_previous_backup() {
@@ -523,15 +522,27 @@ delete_in_progress_backups() {
   fi
   machine_in_progress_backups >> "${in_progress_temp}"
 
+  num_in_progress=0
+  num_deleted=0
   delete_success=false
   while IFS= read -r line ; do
+    num_in_progress="$(( num_in_progress + 1 ))"
     in_progress="$(basename "${line}")"
     if delete_backup "${line}" ; then
       delete_success=true
+      num_deleted="$(( num_deleted + 1 ))"
     fi
   done < "${in_progress_temp}"
   rm "${in_progress_temp}"
 
+  if [ $num_in_progress -eq 0 ] ; then
+    delete_success=true
+    $verbose && echo "No in progress backups found."
+  elif $delete_success ; then
+    $verbose && echo "Successfully deleted ${num_in_progress} in progress backup(s) in '${1}/'"
+  else
+    $verbose && echo "Error! Failed to delete ${num_deleted} of ${num_in_progress} in progress backup(s) in '${1}/'!"
+  fi
   $delete_success
 }
 
