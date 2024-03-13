@@ -42,6 +42,10 @@ Supported verbs currently include:
   * If the `-b` option (currently required) is given, it will wait until the backup has completed before exiting
   * If the `-d` option is given, the backup will be performed to the destination with `dest_id` unique identifier
 * `latestbackup`: Print information about the computer's most recent backup
+* `delete [ -d destination -t timestamp ] [ -p path ]`: Delete a specific backup for the computer
+  * Requires root
+  * If the '-p' option is given, it will delete the backup specified by the path
+  * If the '-d' & '-t' options are given, it will build the backup's path from the destination and timestamp and delete that backup
 * `deleteinprogress machine_directory`: Delete incomplete backups in path
   * Requires root
 
