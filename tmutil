@@ -565,7 +565,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup|latestbackup|deleteinprogress)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup|latestbackup|delete|deleteinprogress)
         verb="$1"
         ;;
       *)
@@ -730,6 +730,48 @@ main() {
       ;;
     latestbackup)
       machine_backup_latest
+      ;;
+    delete)
+      ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
+      delete_destination=""
+      delete_timestamp=""
+      delete_path=""
+      while getopts "d:t:p:" opt_name ; do
+        case "${opt_name}" in
+          d)
+            delete_destination="$OPTARG"
+            ;;
+          t)
+            delete_timestamp="$OPTARG"
+            ;;
+          p)
+            delete_path="$OPTARG"
+            ;;
+          ?)
+            usage
+            exit 1
+            ;;
+        esac
+      done
+      shift $(( $OPTIND - 1 ))
+
+      if [ -n "$delete_path" -a -n "$delete_destination" -a -n "$delete_timestamp" ] ; then
+        echo "Error! The '-p' option is mutually exclusive to the '-d' & '-t' options for the '${verb}' verb."
+        usage
+        exit 1
+      elif [ -z "$delete_path" -a \( -z "$delete_destination" -o -z "$delete_timestamp" \) ] ; then
+        echo "Error! Both the '-d' & '-t' options are required when not using the '-p' option for the '${verb}' verb."
+        usage
+        exit 1
+      elif [ -z "$delete_path" -a -n "$delete_destination" -a -n "$delete_timestamp" ] ; then
+        if ! is_valid_destination "$delete_destination" ; then
+          echo "Error! '${delete_destination}' is not a valid destination!"
+          usage
+          exit 1
+        fi
+        delete_path="${delete_destination}/Backups.backupdb/${host}/${delete_timestamp}"
+      fi
+      delete_backup "$delete_path"
       ;;
     deleteinprogress)
       ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
