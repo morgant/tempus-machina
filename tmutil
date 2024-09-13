@@ -421,11 +421,16 @@ backup() {
 
   while IFS= read -r line ; do
     rsync_dest_mount=""
+    rsync_dest_path=""
     rsync_dest=""
     rsync_dest_final="$(date "+%Y-%m-%d-%H%M%S")"
     rsync_dest_tmp=".${rsync_dest_final}"
     rsync_dest_prev=""
-    rsync_success=false
+    rsync_dest_log=".rsync.${rsync_dest_final}.log"
+    rsync_exit=""
+
+    rsync_verbose=""
+    $verbose && rsync_verbose="-v"
 
     if [ -n "$1" ] ; then
       if [ "${line}" = "${1}=$(destination_mount_by_uuid "${1}")" ] ; then
@@ -436,7 +441,10 @@ backup() {
     else
       rsync_dest_mount="$(destination_config_mount "${line}")"
     fi
-    rsync_dest="${rsync_dest_mount}/Backups.backupdb/${host}/${rsync_dest_tmp}/"
+    rsync_dest_path="${rsync_dest_mount}/Backups.backupdb/${host}/"
+    rsync_dest="${rsync_dest_path}/${rsync_dest_tmp}/"
+    rsync_log_file="${rsync_dest_path}/${rsync_dest_log}"
+
 
     if is_destination_remote "${rsync_dest_mount}" ; then
       echo "ERROR! Could not backup to remote destination '${rsync_dest_mount}' because remote destinations are not yet supported!"
@@ -448,7 +456,10 @@ backup() {
 
     if ! has_destination_mount_previous_backup "${rsync_dest_mount}" ; then
       $verbose && echo "Starting full backup to '${rsync_dest}'..."
-      rsync \
+      # TODO: Why am I not using the '--archive' option here?!
+      # TODO: Should we use the '--delete-delay' option?
+      rsync $rsync_verbose \
+        --log-file="${rsync_log_file}" \
         --recursive \
         --perms \
         --owner \
@@ -459,11 +470,15 @@ backup() {
         --delete-excluded \
         --exclude-from="${config_path}/exclusions" \
         "/" \
-        "${rsync_dest}" && rsync_success=true
+        "${rsync_dest}"
+      rsync_exit=$?
     else
       $verbose && echo "Starting incremental backup to '${rsync_dest}'..."
       rsync_dest_prev="$(destination_mount_previous_backup "${rsync_dest_mount}")"
-      rsync \
+      # TODO: Why am I not using the '--archive' option here?!
+      # TODO: Should we use the '--delete-delay' option?
+      rsync $rsync_verbose \
+        --log-file="${rsync_log_file}" \
         --recursive \
         --perms \
         --owner \
@@ -475,14 +490,25 @@ backup() {
         --exclude-from="${config_path}/exclusions" \
         --link-dest="${rsync_dest_prev}" \
         "/" \
-        "${rsync_dest}" && rsync_success=true
+        "${rsync_dest}"
+      rsync_exit=$?
     fi
-    if $rsync_success ; then
-      $verbose && echo "Successfully completed backup to '${rsync_dest}'."
-      destination_mount_finalize_backup "${rsync_dest_mount}" "${rsync_dest_tmp}" "${rsync_dest_final}"
-    else
-      echo "ERROR! Unknown errors occurred during backup to  '${rsync_dest}'!"
-    fi
+    case $rsync_exit in
+      0)
+        $verbose && echo "Successfully completed backup to '${rsync_dest}'."
+        destination_mount_finalize_backup "${rsync_dest_mount}" "${rsync_dest_tmp}" "${rsync_dest_final}"
+        ;;
+      # partial transfer due to errors
+      23)
+        echo "ERROR! Incomplete backup to '${rsync_dest}' due to errors!"
+        ;;
+      # partial transfer due to vanished source errors
+      24)
+        echo "ERROR! Incomplete backup to '${rsync_dest}' due to some files disappearing before they could be copied!"
+        ;;
+      *)
+        echo "ERROR! Unknown errors occurred during backup to '${rsync_dest}'!"
+    esac
   done < "${config_path}/destinations"
 }
 
