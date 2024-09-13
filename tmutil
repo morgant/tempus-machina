@@ -227,7 +227,7 @@ machine_directory() {
   done < "${config_path}/destinations"
 }
 
-is_machine_directory() {
+is_valid_machine_directory() {
   [ -z "$1" ] && return 1
 
   machine_dir_temp="$(mktemp)"
@@ -239,7 +239,29 @@ is_machine_directory() {
 
   match=false
   while IFS= read -r line ; do
-    if [ "$line" = "$1" ] ; then
+    if [ "$line" = "$1" -a -d "$line" ] ; then
+      match=true
+      break
+    fi
+  done < "${machine_dir_temp}"
+
+  rm "${machine_dir_temp}"
+  $match
+}
+
+is_child_of_machine_directory() {
+  [ -z "$1" ] && return 1
+
+  machine_dir_temp="$(mktemp)"
+  if [ ! -f "${machine_dir_temp}" ] ; then
+    echo "Error! Unable to create temporary file!"
+    return 1
+  fi
+  machine_directory >> "${machine_dir_temp}"
+
+  match=false
+  while IFS= read -r line ; do
+    if echo "$1" | grep -q "$line" && [ -e "$1" ]; then
       match=true
       break
     fi
@@ -251,7 +273,7 @@ is_machine_directory() {
 
 machine_backups() {
   while IFS= read -r line ; do
-    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest" ! -name ".*" -exec basename {} \;
+    find "$(destination_config_mount "${line}")/Backups.backupdb/${host}" -type d -mindepth 1 -maxdepth 1 ! -name "Latest" ! -name ".*" #-exec basename {} \;
   done < "${config_path}/destinations"
 }
 
@@ -267,6 +289,33 @@ machine_backup_latest() {
       destination_mount_previous_backup "$(destination_config_mount "${line}")"
     fi
   done < "${config_path}/destinations"
+}
+
+# NOTE: This is currently unused and should be tested before being relied upon
+machine_backup_previous() {
+  ${1:=$(machine_backup_latest)}
+  [ -z "$1" ] && return 1
+
+  machine_backups_temp="$(mktemp)"
+  if [ ! -f "${machine_backups_temp}" ] ; then
+    echo "Error! Unable to create temporary file!"
+    return 1
+  fi
+  machine_backups > "${machine_backups_temp}"
+
+  previous=""
+  match=false
+  while IFS= read -r line ; do
+    if [ -n "$previous" -a "$line" = "$1" ] ; then
+      echo "$previous"
+      match=true
+      break
+    fi
+    previous="$line"
+  done < "${machine_backups_temp}"
+
+  rm "${machine_backups_temp}"
+  $match
 }
 
 has_destination_mount_in_progress_backup() {
@@ -411,6 +460,37 @@ is_backup_directory() {
   $match
 }
 
+calculate_backup_unique_size() {
+  if [ -z "$1" ] || ! is_child_of_machine_directory "$1" ; then
+    echo "${1}: Not inside a machine directory."
+    return 1
+  fi
+
+  # a unique file should have one hard link from its immediate parent directory
+  # if it has more than one hard link, that _should_ mean it's linked to from one or more names and/or directories
+  #
+  # NOTE: This needs more rigerous testing & confirmation
+  files_temp="$(mktemp)"
+  if [ ! -f "${files_temp}" ] ; then
+    echo "Error! Unable to create temporary file!"
+    return 1
+  fi
+  find "$1" -type f -links 1 -exec du -cksx {} \; | tr "\t" " " > "${files_temp}"
+
+  # sum the file sizes in kilobytes
+  _sum=0
+  while IFS= read -r line ; do
+    if [ "${line##* }" = "total" ] ; then
+      _size="${line%% *}"
+      _sum=$(( _sum + _size ))
+    fi
+  done < "${files_temp}"
+  rm "${files_temp}"
+
+  # TODO: This should output a human-readable size
+  echo "${_sum}K $(dirname "${1}")"
+}
+
 backup() {
   if [ -n "$1" ] ; then
     if ! has_destination_uuid "$1" ; then
@@ -509,7 +589,7 @@ delete_in_progress_backups() {
   if [ -z "$1" ] ; then
     echo "Error! Must provide a machine directory!"
     return 1
-  elif ! is_machine_directory "$1" ; then
+  elif ! is_valid_machine_directory "$1" ; then
     echo "Error! Unable to delete in progress backups in '${1}' because it is not a machine directory!"
     return 1
   fi
@@ -565,7 +645,7 @@ main() {
         version
         exit
         ;;
-      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup|latestbackup|delete|deleteinprogress)
+      setdestination|destinationinfo|removedestination|machinedirectory|listbackups|addexclusion|removeexclusion|isexcluded|startbackup|stopbackup|latestbackup|delete|deleteinprogress|uniquesize)
         verb="$1"
         ;;
       *)
@@ -776,6 +856,9 @@ main() {
     deleteinprogress)
       ! is_root && echo "ERROR! The '${verb}' verb requires root privileges!" && exit 1
       delete_in_progress_backups "$1"
+      ;;
+    uniquesize)
+      calculate_backup_unique_size "$@"
       ;;
   esac
 }
